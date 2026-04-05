@@ -29,7 +29,7 @@ type queryServer struct {
 }
 
 func (s *queryServer) Cypher(ctx context.Context, req *querypb.CypherRequest) (*querypb.QueryResponse, error) {
-	result, err := s.executor.Execute(req.Query)
+	result, err := s.executor.ExecuteAndReturn(req.Query)
 	if err != nil {
 		return nil, fmt.Errorf("cypher: %w", err)
 	}

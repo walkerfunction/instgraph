@@ -47,7 +47,14 @@ func (e *Executor) executeQuery(q *Query) (*Result, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("query must end with RETURN")
+	// Extract result from bindings
+	for _, b := range bindings {
+		if r, ok := b["__result"]; ok {
+			return r.(*Result), nil
+		}
+	}
+
+	return &Result{}, nil
 }
 
 func (e *Executor) executeClause(clause Clause, bindings []binding) ([]binding, error) {
