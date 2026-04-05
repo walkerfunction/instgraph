@@ -1,0 +1,63 @@
+{
+  "nodes": {
+    "Player": {
+      "name": { "type": "string", "required": true },
+      "country": { "type": "string" },
+      "role": { "type": "string" }
+    },
+    "Team": {
+      "name": { "type": "string", "required": true },
+      "type": { "type": "string" }
+    },
+    "Match": {
+      "date": { "type": "string" },
+      "venue": { "type": "string" },
+      "format": { "type": "string" },
+      "result": { "type": "string" }
+    },
+    "Tournament": {
+      "name": { "type": "string", "required": true },
+      "year": { "type": "int" }
+    }
+  },
+  "edges": {
+    "PLAYS_FOR": { "from": "Player", "to": "Team" },
+    "PLAYED_IN": {
+      "from": "Player",
+      "to": "Match",
+      "properties": {
+        "runs": { "type": "int" },
+        "wickets": { "type": "int" },
+        "balls_faced": { "type": "int" },
+        "death_overs_sr": { "type": "float" }
+      }
+    },
+    "BETWEEN": { "from": "Match", "to": "Team" },
+    "PART_OF": { "from": "Match", "to": "Tournament" },
+    "DISMISSED_BY": {
+      "from": "Player",
+      "to": "Player",
+      "properties": {
+        "type": { "type": "string" },
+        "fielder": { "type": "string" },
+        "match": { "type": "string" }
+      }
+    },
+    "PARTNERED_WITH": {
+      "from": "Player",
+      "to": "Player",
+      "properties": {
+        "runs": { "type": "int" },
+        "position": { "type": "int" },
+        "match": { "type": "string" }
+      }
+    },
+    "CAPTAINED": {
+      "from": "Player",
+      "to": "Team",
+      "properties": {
+        "matches": { "type": "int" }
+      }
+    }
+  }
+}
