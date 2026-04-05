@@ -41,6 +41,20 @@ func (p *Parser) expect(tt TokenType) (Token, error) {
 	return t, nil
 }
 
+// expectIdentOrKeyword accepts an identifier or any keyword token as a label/type name.
+// This allows node labels like "Match" and edge types like "SET" that collide with keywords.
+func (p *Parser) expectIdentOrKeyword() (Token, error) {
+	t := p.peek()
+	if t.Type == TokenIdent || isKeywordToken(t.Type) {
+		return p.advance(), nil
+	}
+	return t, fmt.Errorf("expected identifier, got %q at pos %d", t.Value, t.Pos)
+}
+
+func isKeywordToken(tt TokenType) bool {
+	return tt >= TokenMatch && tt <= TokenUnwind
+}
+
 func (p *Parser) match(tt TokenType) bool {
 	if p.peek().Type == tt {
 		p.advance()
@@ -445,9 +459,9 @@ func (p *Parser) parseNodePattern() (NodePattern, error) {
 		np.Variable = p.advance().Value
 	}
 
-	// Optional labels
+	// Optional labels (accept keywords as labels, e.g. :Match, :Set)
 	for p.match(TokenColon) {
-		t, err := p.expect(TokenIdent)
+		t, err := p.expectIdentOrKeyword()
 		if err != nil {
 			return np, fmt.Errorf("expected label after :")
 		}
@@ -487,10 +501,10 @@ func (p *Parser) parseRelPattern() (RelPattern, error) {
 			rp.Variable = p.advance().Value
 		}
 
-		// Optional types :TYPE or :TYPE|TYPE2
+		// Optional types :TYPE or :TYPE|TYPE2 (accept keywords as types)
 		if p.match(TokenColon) {
 			for {
-				t, err := p.expect(TokenIdent)
+				t, err := p.expectIdentOrKeyword()
 				if err != nil {
 					return rp, fmt.Errorf("expected relationship type after :")
 				}
