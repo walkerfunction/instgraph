@@ -373,23 +373,22 @@ func (e *Executor) getRelNeighbors(nodeID graph.NodeID, rp RelPattern) []graph.N
 }
 
 func (e *Executor) findEdgeBetween(from, to graph.NodeID, rp RelPattern) *graph.Edge {
+	var dir graph.Direction
+	switch rp.Direction {
+	case DirRight:
+		dir = graph.Out
+	case DirLeft:
+		dir = graph.In
+	default:
+		dir = graph.Both
+	}
+
+	if len(rp.Types) == 0 {
+		return e.g.FindEdge(from, to, "", dir)
+	}
 	for _, t := range rp.Types {
-		for _, eid := range e.g.EdgesByType(t) {
-			edge := e.g.GetEdge(eid)
-			if edge == nil {
-				continue
-			}
-			if rp.Direction == DirRight && edge.From == from && edge.To == to {
-				return edge
-			}
-			if rp.Direction == DirLeft && edge.From == to && edge.To == from {
-				return edge
-			}
-			if rp.Direction == DirBoth {
-				if (edge.From == from && edge.To == to) || (edge.From == to && edge.To == from) {
-					return edge
-				}
-			}
+		if edge := e.g.FindEdge(from, to, t, dir); edge != nil {
+			return edge
 		}
 	}
 	return nil

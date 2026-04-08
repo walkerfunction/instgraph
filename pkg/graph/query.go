@@ -61,6 +61,52 @@ func (g *Graph) NodesByLabel(label string) []NodeID {
 	return g.indexes.nodesByLabel(lid)
 }
 
+// FindEdge finds an edge between two specific nodes with the given type.
+// Uses the from node's adjacency list — O(degree) instead of O(all edges).
+func (g *Graph) FindEdge(from, to NodeID, edgeType string, dir Direction) *Edge {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+
+	var typeFilter uint16
+	hasFilter := false
+	if edgeType != "" {
+		if tid, ok := g.store.edgeTypeRegistry[edgeType]; ok {
+			typeFilter = tid
+			hasFilter = true
+		} else {
+			return nil
+		}
+	}
+
+	if dir == Out || dir == Both {
+		for _, eid := range g.store.outEdges[from] {
+			e := &g.store.edges[eid]
+			if hasFilter && e.Type != typeFilter {
+				continue
+			}
+			if e.To == to {
+				edge := *e
+				return &edge
+			}
+		}
+	}
+
+	if dir == In || dir == Both {
+		for _, eid := range g.store.inEdges[from] {
+			e := &g.store.edges[eid]
+			if hasFilter && e.Type != typeFilter {
+				continue
+			}
+			if e.From == to {
+				edge := *e
+				return &edge
+			}
+		}
+	}
+
+	return nil
+}
+
 // EdgesByType returns all edge IDs with the given type.
 func (g *Graph) EdgesByType(edgeType string) []EdgeID {
 	g.mu.RLock()
