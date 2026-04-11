@@ -201,3 +201,53 @@ func TestExecuteShortestPath(t *testing.T) {
 		t.Errorf("expected 1 row, got %d", len(result.Rows))
 	}
 }
+
+// TestParsePropertyNameIsKeyword covers the case where a property name happens
+// to collide with a Cypher keyword (e.g. `.match`, `.type`, `.count`). The lexer
+// upcases identifiers and matches against the keywords table, so without special
+// handling these tokens come through as keyword tokens and the parser rejects
+// them in property-access, map-literal, AS-alias, SET target, and UNWIND AS spots.
+// LLM-generated queries routinely use schema property names like `match` and
+// `type`, so all of these positions must accept keyword tokens as names.
+func TestParsePropertyNameIsKeyword(t *testing.T) {
+	cases := []string{
+		// property access after '.'
+		`MATCH (d)-[r:DISMISSED_BY]->(b) WHERE r.match = 'x' RETURN r.type, r.match`,
+		// map literal key collides with keyword
+		`MATCH (n:Player {match: 'x'}) RETURN n.name`,
+		// AS alias collides with keyword
+		`MATCH (n:Player) RETURN n.name AS match`,
+		// SET target property name collides with keyword
+		`MATCH (n:Player) SET n.match = 'x'`,
+		// property access appearing in ORDER BY after an AS alias
+		`MATCH (n:Player)-[r:DISMISSED_BY]->(b) RETURN r.type ORDER BY r.match DESC LIMIT 5`,
+	}
+	for _, q := range cases {
+		if _, err := Parse(q); err != nil {
+			t.Errorf("Parse(%q) failed: %v", q, err)
+		}
+	}
+}
+
+// TestParseClaudeGeneratedQueries uses the exact Cypher strings that
+// instcric-app's analyst logged as failing with
+// "parse error: expected property name after ." — regression guard.
+func TestParseClaudeGeneratedQueries(t *testing.T) {
+	queries := []string{
+		`MATCH (m:Match)-[:BETWEEN]->(t1:Team {name: 'Singh Warriors'}) ` +
+			`MATCH (m)-[:BETWEEN]->(t2:Team {name: 'Gladiators'}) ` +
+			`MATCH (a:Player)-[d:DISMISSED_BY]->(b:Player) WHERE d.match = m.date ` +
+			`RETURN a.name AS batter, b.name AS bowler, d.type AS dismissal_type, ` +
+			`COUNT(*) AS times ORDER BY times DESC LIMIT 15`,
+		`MATCH (bowler:Player)-[:PLAYS_FOR]->(t1:Team {name: 'Singh Warriors'}) ` +
+			`MATCH (batter:Player)-[:PLAYS_FOR]->(t2:Team {name: 'Gladiators'}) ` +
+			`MATCH (batter)-[d:DISMISSED_BY]->(bowler) ` +
+			`RETURN bowler.name AS bowler, batter.name AS batter, ` +
+			`d.type AS dismissal_type, d.match AS match`,
+	}
+	for _, q := range queries {
+		if _, err := Parse(q); err != nil {
+			t.Errorf("Parse failed: %v\nquery: %s", err, q)
+		}
+	}
+}

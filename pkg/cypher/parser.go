@@ -211,7 +211,7 @@ func (p *Parser) parseReturnItems() ([]ReturnItem, error) {
 		item := ReturnItem{Expr: expr}
 		if p.peek().Type == TokenAs {
 			p.advance()
-			t, err := p.expect(TokenIdent)
+			t, err := p.expectIdentOrKeyword()
 			if err != nil {
 				return nil, fmt.Errorf("expected alias after AS")
 			}
@@ -291,7 +291,7 @@ func (p *Parser) parseSet() (Clause, error) {
 		if _, err := p.expect(TokenDot); err != nil {
 			return nil, fmt.Errorf("expected . after identifier in SET")
 		}
-		propTok, err := p.expect(TokenIdent)
+		propTok, err := p.expectIdentOrKeyword()
 		if err != nil {
 			return nil, fmt.Errorf("expected property name in SET")
 		}
@@ -382,7 +382,7 @@ func (p *Parser) parseUnwind() (Clause, error) {
 	if _, err := p.expect(TokenAs); err != nil {
 		return nil, fmt.Errorf("expected AS after UNWIND expression")
 	}
-	alias, err := p.expect(TokenIdent)
+	alias, err := p.expectIdentOrKeyword()
 	if err != nil {
 		return nil, fmt.Errorf("expected alias after UNWIND AS")
 	}
@@ -571,7 +571,7 @@ func (p *Parser) parseMapLiteral() (map[string]Expr, error) {
 	}
 
 	for {
-		key, err := p.expect(TokenIdent)
+		key, err := p.expectIdentOrKeyword()
 		if err != nil {
 			return nil, fmt.Errorf("expected property name in map")
 		}
@@ -842,7 +842,7 @@ func (p *Parser) parsePrimary() (Expr, error) {
 		// Check for property access: ident.prop
 		if p.peek().Type == TokenDot {
 			p.advance() // consume .
-			prop, err := p.expect(TokenIdent)
+			prop, err := p.expectIdentOrKeyword()
 			if err != nil {
 				return nil, fmt.Errorf("expected property name after .")
 			}
