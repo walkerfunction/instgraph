@@ -37,6 +37,7 @@ func (p *Persister) TakeSnapshot(g *graph.Graph) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	prevTS := p.snapCount
 	p.snapCount++
 	ts := p.snapCount
 	walSeq := p.wal.CurrentSeq()
@@ -130,32 +131,80 @@ func (p *Persister) TakeSnapshot(g *graph.Graph) error {
 		}
 	}
 
+	// Delete the previous snapshot to prevent unbounded Pebble growth.
+	// Only the latest snapshot is used for recovery (findLatestSnapshot
+	// seeks to iter.Last()), so old snapshots are pure dead weight that
+	// triggers constant LSM compaction.
+	if prevTS > 0 {
+		if err := p.deleteSnapshot(prevTS); err != nil {
+			return fmt.Errorf("deleting previous snapshot: %w", err)
+		}
+	}
+
 	return nil
 }
 
-// Key format helpers.
+// deleteSnapshot removes all keys belonging to a snapshot (meta + nodes + edges).
+func (p *Persister) deleteSnapshot(ts uint64) error {
+	// Delete snapshot meta key.
+	if err := p.db.Delete(snapMetaKey(ts), pebble.NoSync); err != nil {
+		return err
+	}
 
+	// Delete all snapshot node keys: snapn{ts}:* → snapn{ts+1}
+	nLower := make([]byte, 13)
+	copy(nLower, "snapn")
+	binary.BigEndian.PutUint64(nLower[5:], ts)
+
+	nUpper := make([]byte, 13)
+	copy(nUpper, "snapn")
+	binary.BigEndian.PutUint64(nUpper[5:], ts+1)
+
+	if err := p.db.DeleteRange(nLower, nUpper, pebble.NoSync); err != nil {
+		return err
+	}
+
+	// Delete all snapshot edge keys: snape{ts}:* → snape{ts+1}
+	eLower := make([]byte, 13)
+	copy(eLower, "snape")
+	binary.BigEndian.PutUint64(eLower[5:], ts)
+
+	eUpper := make([]byte, 13)
+	copy(eUpper, "snape")
+	binary.BigEndian.PutUint64(eUpper[5:], ts+1)
+
+	if err := p.db.DeleteRange(eLower, eUpper, pebble.NoSync); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// snapMetaKey returns the Pebble key for a snapshot's metadata.
+// Format: "snap:" + uint64(ts)
 func snapMetaKey(ts uint64) []byte {
-	key := make([]byte, 13) // "snap:" + 8 bytes
+	key := make([]byte, 13)
 	copy(key, "snap:")
 	binary.BigEndian.PutUint64(key[5:], ts)
 	return key
 }
 
+// snapNodeKey returns the Pebble key for a node in a snapshot.
+// Format: "snapn" + uint64(ts) + uint32(nodeID)
 func snapNodeKey(ts uint64, nodeID uint32) []byte {
-	key := make([]byte, 18) // "snapn" + 8 + ":" + 4
+	key := make([]byte, 17)
 	copy(key, "snapn")
 	binary.BigEndian.PutUint64(key[5:], ts)
-	key[13] = ':'
-	binary.BigEndian.PutUint32(key[14:], nodeID)
+	binary.BigEndian.PutUint32(key[13:], nodeID)
 	return key
 }
 
+// snapEdgeKey returns the Pebble key for an edge in a snapshot.
+// Format: "snape" + uint64(ts) + uint32(edgeID)
 func snapEdgeKey(ts uint64, edgeID uint32) []byte {
-	key := make([]byte, 18) // "snape" + 8 + ":" + 4
+	key := make([]byte, 17)
 	copy(key, "snape")
 	binary.BigEndian.PutUint64(key[5:], ts)
-	key[13] = ':'
-	binary.BigEndian.PutUint32(key[14:], edgeID)
+	binary.BigEndian.PutUint32(key[13:], edgeID)
 	return key
 }
